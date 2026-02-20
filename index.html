@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>超かぐや姫！ 立川聖地巡礼マップ</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0a1a;
+    --card: #12122a;
+    --card-hover: #1a1a3a;
+    --accent: #e8b4f8;
+    --accent2: #7eb8ff;
+    --gold: #ffd700;
+    --text: #e0e0f0;
+    --text-dim: #8888aa;
+    --stamp-done: #ffd700;
+    --stamp-todo: #333355;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, #1a0a2e, #0a1628);
+    padding: 16px 20px;
+    text-align: center;
+    border-bottom: 1px solid #2a2a4a;
+    position: relative;
+  }
+  .header h1 {
+    font-size: 20px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .header .date {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+  .progress-bar {
+    margin-top: 10px;
+    background: #1a1a3a;
+    border-radius: 10px;
+    height: 8px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--gold));
+    border-radius: 10px;
+    transition: width 0.5s ease;
+  }
+  .progress-text {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    background: #0e0e22;
+    border-bottom: 1px solid #2a2a4a;
+  }
+  .tab {
+    flex: 1;
+    padding: 12px;
+    text-align: center;
+    font-size: 14px;
+    color: var(--text-dim);
+    border: none;
+    background: none;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .tab.active {
+    color: var(--accent);
+    border-bottom: 2px solid var(--accent);
+  }
+
+  /* Map */
+  #map {
+    height: calc(100dvh - 200px);
+    min-height: 300px;
+  }
+
+  /* Spot list */
+  .spot-list {
+    padding: 12px;
+    display: none;
+    max-height: calc(100dvh - 200px);
+    overflow-y: auto;
+  }
+  .spot-list.active, #map-container.active { display: block; }
+  #map-container { display: none; }
+
+  .area-label {
+    font-size: 12px;
+    color: var(--accent);
+    padding: 8px 4px 4px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .spot-card {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid transparent;
+  }
+  .spot-card:hover { background: var(--card-hover); }
+  .spot-card.visited { border-color: var(--gold); }
+
+  .stamp {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2px dashed var(--stamp-todo);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+    transition: all 0.3s;
+    position: relative;
+  }
+  .stamp.done {
+    border: 2px solid var(--stamp-done);
+    background: rgba(255, 215, 0, 0.15);
+    animation: stamp-pop 0.4s ease;
+  }
+  @keyframes stamp-pop {
+    0% { transform: scale(0.5) rotate(-20deg); }
+    60% { transform: scale(1.2) rotate(5deg); }
+    100% { transform: scale(1) rotate(0deg); }
+  }
+  .stamp .num {
+    font-size: 14px;
+    font-weight: bold;
+    color: var(--stamp-todo);
+  }
+  .stamp.done .num { color: var(--stamp-done); }
+
+  .spot-info h3 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 3px;
+  }
+  .spot-info .scene {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.4;
+  }
+  .spot-info .distance {
+    font-size: 11px;
+    color: var(--accent2);
+    margin-top: 4px;
+  }
+
+  .spot-card .nav-btn {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: var(--accent2);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 8px;
+    flex-shrink: 0;
+    align-self: center;
+  }
+
+  /* Share button */
+  .share-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 12px 20px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    background: linear-gradient(transparent, var(--bg) 30%);
+    display: flex;
+    gap: 8px;
+  }
+  .share-btn {
+    flex: 1;
+    padding: 12px;
+    border-radius: 12px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .share-btn.primary {
+    background: linear-gradient(135deg, #6a3093, #3a6bd5);
+    color: white;
+  }
+  .share-btn.secondary {
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid #2a2a4a;
+  }
+
+  /* Popup */
+  .leaflet-popup-content-wrapper {
+    background: var(--card) !important;
+    color: var(--text) !important;
+    border-radius: 12px !important;
+    border: 1px solid #2a2a4a;
+  }
+  .leaflet-popup-tip { background: var(--card) !important; }
+  .popup-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+  .popup-scene { font-size: 12px; color: var(--text-dim); }
+  .popup-btn {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 6px 14px;
+    background: linear-gradient(135deg, #6a3093, #3a6bd5);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  /* Confetti */
+  .confetti-container {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    z-index: 9999;
+  }
+  .confetti {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    opacity: 0;
+  }
+
+  /* Complete overlay */
+  .complete-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.8);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    text-align: center;
+    padding: 40px;
+  }
+  .complete-overlay.show { display: flex; }
+  .complete-overlay h2 {
+    font-size: 28px;
+    background: linear-gradient(90deg, var(--gold), var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 12px;
+  }
+  .complete-overlay p { color: var(--text-dim); }
+  .complete-overlay button {
+    margin-top: 20px;
+    padding: 12px 32px;
+    border-radius: 12px;
+    border: none;
+    background: var(--card);
+    color: var(--text);
+    font-size: 16px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>超かぐや姫！ 聖地巡礼マップ</h1>
+  <div class="date">2026.02.23 立川</div>
+  <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+  <div class="progress-text" id="progress-text">0 / 0 スポット訪問済み</div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('list')">スタンプラリー</button>
+  <button class="tab" onclick="switchTab('map')">マップ</button>
+</div>
+
+<div class="spot-list active" id="spot-list"></div>
+<div id="map-container"><div id="map"></div></div>
+
+<div class="share-bar">
+  <button class="share-btn secondary" onclick="resetAll()">リセット</button>
+  <button class="share-btn primary" onclick="shareResult()">結果をシェア</button>
+</div>
+
+<div class="complete-overlay" id="complete-overlay">
+  <h2>聖地巡礼 コンプリート！</h2>
+  <p>全スポットを制覇しました！<br>お疲れさまでした！</p>
+  <button onclick="document.getElementById('complete-overlay').classList.remove('show')">閉じる</button>
+</div>
+
+<div class="confetti-container" id="confetti"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const SPOTS = [
+  // 立川駅北側エリア（徒歩圏）
+  {
+    id: 1, area: "立川駅北側",
+    name: "サンサンロード",
+    scene: "彩葉が流れ星を見つけるシーン、かぐやが尾行するシーンなど最頻出スポット",
+    lat: 35.6998, lng: 139.4087,
+    address: "立川市曙町2-42"
+  },
+  {
+    id: 2, area: "立川駅北側",
+    name: "たましん美術館前",
+    scene: "GREEN SPRINGSへ向かう場面など複数シーンの背景",
+    lat: 35.7008, lng: 139.4075,
+    address: "立川市緑町3-4"
+  },
+  {
+    id: 3, area: "立川駅北側",
+    name: "GREEN SPRINGS",
+    scene: "テストのお礼でパンケーキを食べるシーン。かぐやと名付ける場所",
+    lat: 35.7017, lng: 139.4063,
+    address: "立川市緑町3-1"
+  },
+  {
+    id: 4, area: "立川駅北側",
+    name: "立川タクロス",
+    scene: "引っ越し先として登場。モノレールの線路が見えるアングル",
+    lat: 35.6988, lng: 139.4118,
+    address: "立川市曙町2-4-1"
+  },
+  {
+    id: 5, area: "立川駅北側",
+    name: "プラウドタワー立川",
+    scene: "かぐやがライバーとして成功後に引っ越すタワマン（3LDKメゾネット）",
+    lat: 35.6978, lng: 139.4130,
+    address: "立川市曙町2-22"
+  },
+  // 立川駅南側エリア
+  {
+    id: 6, area: "立川駅南側",
+    name: "ファミリーマート立川諏訪通り店",
+    scene: "浴衣の着付けシーン。花火大会へ向かう前のシーン",
+    lat: 35.6953, lng: 139.4132,
+    address: "立川市柴崎町3-1-7"
+  },
+  {
+    id: 7, area: "立川駅南側",
+    name: "多摩モノレール立川南駅",
+    scene: "登下校シーンの背景",
+    lat: 35.6960, lng: 139.4138,
+    address: "立川市柴崎町3-6"
+  },
+  // 映画館
+  {
+    id: 8, area: "映画館",
+    name: "シネマシティ シネマ・ツー",
+    scene: "聖地のど真ん中にある映画館！ここで超かぐや姫を観る",
+    lat: 35.6992, lng: 139.4092,
+    address: "立川市曙町2-42-26"
+  },
+  // 少し離れたエリア
+  {
+    id: 9, area: "モノレール沿線",
+    name: "砂川七番駅付近",
+    scene: "彩葉が体調不良でしゃがみこむシーン。駅南側の青看板",
+    lat: 35.7263, lng: 139.4048,
+    address: "立川市幸町5"
+  },
+  {
+    id: 10, area: "モノレール沿線",
+    name: "西松屋 立川柏町店",
+    scene: "赤ん坊のかぐやのベビー用品を買うシーン（作中では「西竹屋」）",
+    lat: 35.7170, lng: 139.4195,
+    address: "立川市柏町2-23-1"
+  },
+];
+
+// State
+let visited = JSON.parse(localStorage.getItem('kaguya-visited') || '{}');
+
+function save() {
+  localStorage.setItem('kaguya-visited', JSON.stringify(visited));
+}
+
+function countVisited() {
+  return Object.keys(visited).filter(k => visited[k]).length;
+}
+
+function updateProgress() {
+  const done = countVisited();
+  const total = SPOTS.length;
+  document.getElementById('progress-fill').style.width = `${(done / total) * 100}%`;
+  document.getElementById('progress-text').textContent = `${done} / ${total} スポット訪問済み`;
+}
+
+function toggleVisit(id) {
+  visited[id] = !visited[id];
+  save();
+  renderList();
+  updateProgress();
+  updateMarkers();
+
+  if (visited[id]) {
+    fireConfetti();
+    if (countVisited() === SPOTS.length) {
+      setTimeout(() => {
+        document.getElementById('complete-overlay').classList.add('show');
+        for (let i = 0; i < 5; i++) setTimeout(fireConfetti, i * 300);
+      }, 500);
+    }
+  }
+}
+
+function renderList() {
+  const container = document.getElementById('spot-list');
+  let html = '';
+  let currentArea = '';
+
+  SPOTS.forEach(spot => {
+    if (spot.area !== currentArea) {
+      currentArea = spot.area;
+      html += `<div class="area-label">${currentArea}</div>`;
+    }
+    const done = visited[spot.id];
+    html += `
+      <div class="spot-card ${done ? 'visited' : ''}" onclick="toggleVisit(${spot.id})">
+        <div class="stamp ${done ? 'done' : ''}">
+          ${done ? '<span style="font-size:22px">&#x2714;</span>' : `<span class="num">${spot.id}</span>`}
+        </div>
+        <div class="spot-info">
+          <h3>${spot.name}</h3>
+          <div class="scene">${spot.scene}</div>
+        </div>
+        <button class="nav-btn" onclick="event.stopPropagation(); openNav(${spot.lat}, ${spot.lng}, '${spot.name}')" title="ナビ">&#x27A4;</button>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+
+function openNav(lat, lng, name) {
+  const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&destination_place_id=&travelmode=walking`;
+  window.open(url, '_blank');
+}
+
+// Map
+let map, markers = {};
+
+function initMap() {
+  map = L.map('map', { zoomControl: false }).setView([35.6995, 139.4100], 15);
+
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap &copy; CARTO',
+    maxZoom: 19
+  }).addTo(map);
+
+  SPOTS.forEach(spot => {
+    const done = visited[spot.id];
+    const marker = L.circleMarker([spot.lat, spot.lng], {
+      radius: done ? 12 : 9,
+      fillColor: done ? '#ffd700' : spot.area === '映画館' ? '#ff6b9d' : '#7eb8ff',
+      color: done ? '#ffd700' : '#ffffff',
+      weight: 2,
+      opacity: 0.9,
+      fillOpacity: done ? 0.8 : 0.6
+    }).addTo(map);
+
+    marker.bindPopup(`
+      <div class="popup-title">${spot.id}. ${spot.name}</div>
+      <div class="popup-scene">${spot.scene}</div>
+      <button class="popup-btn" onclick="toggleVisit(${spot.id})">
+        ${done ? '訪問済みを取消' : 'スタンプを押す！'}
+      </button>
+    `);
+
+    markers[spot.id] = marker;
+  });
+}
+
+function updateMarkers() {
+  SPOTS.forEach(spot => {
+    const done = visited[spot.id];
+    const m = markers[spot.id];
+    if (!m) return;
+    m.setStyle({
+      radius: done ? 12 : 9,
+      fillColor: done ? '#ffd700' : spot.area === '映画館' ? '#ff6b9d' : '#7eb8ff',
+      color: done ? '#ffd700' : '#ffffff',
+      fillOpacity: done ? 0.8 : 0.6
+    });
+    m.setPopupContent(`
+      <div class="popup-title">${spot.id}. ${spot.name}</div>
+      <div class="popup-scene">${spot.scene}</div>
+      <button class="popup-btn" onclick="toggleVisit(${spot.id})">
+        ${done ? '訪問済みを取消' : 'スタンプを押す！'}
+      </button>
+    `);
+  });
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  if (tab === 'list') {
+    document.getElementById('spot-list').classList.add('active');
+    document.getElementById('map-container').classList.remove('active');
+    document.querySelectorAll('.tab')[0].classList.add('active');
+  } else {
+    document.getElementById('spot-list').classList.remove('active');
+    document.getElementById('map-container').classList.add('active');
+    document.querySelectorAll('.tab')[1].classList.add('active');
+    if (!map) initMap();
+    else setTimeout(() => map.invalidateSize(), 100);
+  }
+}
+
+function fireConfetti() {
+  const container = document.getElementById('confetti');
+  const colors = ['#ffd700', '#e8b4f8', '#7eb8ff', '#ff6b9d', '#50fa7b'];
+  for (let i = 0; i < 30; i++) {
+    const el = document.createElement('div');
+    el.className = 'confetti';
+    el.style.left = Math.random() * 100 + '%';
+    el.style.top = '-10px';
+    el.style.background = colors[Math.floor(Math.random() * colors.length)];
+    el.style.borderRadius = Math.random() > 0.5 ? '50%' : '0';
+    el.style.width = (4 + Math.random() * 6) + 'px';
+    el.style.height = (4 + Math.random() * 6) + 'px';
+
+    const duration = 1 + Math.random() * 2;
+    const drift = (Math.random() - 0.5) * 200;
+    el.animate([
+      { transform: `translate(0, 0) rotate(0deg)`, opacity: 1 },
+      { transform: `translate(${drift}px, ${window.innerHeight + 20}px) rotate(${Math.random() * 720}deg)`, opacity: 0 }
+    ], { duration: duration * 1000, easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)' });
+
+    container.appendChild(el);
+    setTimeout(() => el.remove(), duration * 1000);
+  }
+}
+
+function shareResult() {
+  const done = countVisited();
+  const total = SPOTS.length;
+  const stamps = SPOTS.map(s => visited[s.id] ? '\u2B50' : '\u2B1C').join('');
+  const text = `\u7AF9\u53D6\u7269\u8A9E \u8D85\u304B\u3050\u3084\u59EB\uFF01 \u7ACB\u5DDD\u8056\u5730\u5DE1\u793C\n${stamps}\n${done}/${total} \u30B9\u30DD\u30C3\u30C8\u5236\u8987\uFF01`;
+
+  if (navigator.share) {
+    navigator.share({ title: '\u8D85\u304B\u3050\u3084\u59EB \u8056\u5730\u5DE1\u793C', text: text });
+  } else {
+    navigator.clipboard.writeText(text).then(() => alert('\u30B3\u30D4\u30FC\u3057\u307E\u3057\u305F\uFF01'));
+  }
+}
+
+function resetAll() {
+  if (confirm('\u5168\u3066\u306E\u30B9\u30BF\u30F3\u30D7\u3092\u30EA\u30BB\u30C3\u30C8\u3057\u307E\u3059\u304B\uFF1F')) {
+    visited = {};
+    save();
+    renderList();
+    updateProgress();
+    updateMarkers();
+  }
+}
+
+// Init
+renderList();
+updateProgress();
+</script>
+</body>
+</html>
