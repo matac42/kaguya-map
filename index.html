@@ -259,6 +259,61 @@
     align-self: center;
   }
 
+  /* Scene image */
+  .scene-img-wrap {
+    margin-top: 8px;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+  }
+  .scene-img-wrap img {
+    width: 100%;
+    display: block;
+    border-radius: 8px;
+    transition: opacity 0.3s;
+  }
+  .scene-img-wrap .img-label {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 4px 8px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.7));
+    font-size: 10px;
+    color: var(--text-dim);
+    text-align: right;
+  }
+
+  /* Lightbox */
+  .lightbox {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.92);
+    z-index: 10001;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    cursor: pointer;
+  }
+  .lightbox.show { display: flex; }
+  .lightbox img {
+    max-width: 100%;
+    max-height: 90vh;
+    border-radius: 8px;
+    object-fit: contain;
+  }
+  .lightbox .lb-caption {
+    position: absolute;
+    bottom: 20px;
+    left: 0; right: 0;
+    text-align: center;
+    color: var(--text);
+    font-size: 14px;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
   /* Share button */
   .share-bar {
     position: fixed;
@@ -384,6 +439,11 @@
   <h2>聖地巡礼 コンプリート！</h2>
   <p>全スポットを制覇しました！<br>お疲れさまでした！</p>
   <button onclick="document.getElementById('complete-overlay').classList.remove('show')">閉じる</button>
+</div>
+
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <img id="lb-img" src="" alt="">
+  <div class="lb-caption" id="lb-caption"></div>
 </div>
 
 <div class="nearby-toast" id="nearby-toast">
@@ -528,6 +588,10 @@ function renderList() {
         <div class="spot-info">
           <h3>${spot.name}</h3>
           <div class="scene">${spot.scene}</div>
+          <div class="scene-img-wrap" onclick="event.stopPropagation(); openLightbox(${spot.id}, '${spot.name}')">
+            <img src="img/${spot.id}.jpg" alt="${spot.name}" onerror="this.parentElement.style.display='none'" loading="lazy">
+            <div class="img-label">作中シーン</div>
+          </div>
           ${spot._dist != null ? `<div class="distance ${spot._dist < 50 ? 'near' : ''}">${formatDist(spot._dist)}</div>` : ''}
         </div>
         <button class="nav-btn" onclick="event.stopPropagation(); openNav(${spot.lat}, ${spot.lng}, '${spot.name}')" title="ナビ">&#x27A4;</button>
@@ -536,6 +600,17 @@ function renderList() {
   });
 
   container.innerHTML = html;
+}
+
+function openLightbox(id, name) {
+  const lb = document.getElementById('lightbox');
+  document.getElementById('lb-img').src = `img/${id}.jpg`;
+  document.getElementById('lb-caption').textContent = name;
+  lb.classList.add('show');
+}
+
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('show');
 }
 
 function openNav(lat, lng, name) {
